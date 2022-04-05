@@ -9,6 +9,8 @@ class Channel:
 
 
 class BSC(Channel):
+    name = 'BSC channel'
+
     def __init__(self, p=0.1, seed=None):
         self.p = p
         self.name = f'BSC with p={p}'
