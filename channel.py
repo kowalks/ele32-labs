@@ -11,16 +11,14 @@ class Channel:
 class BSC(Channel):
     name = 'BSC channel'
 
-    def __init__(self, p=0.1, seed=None):
+    def __init__(self, p=0.1):
         self.p = p
         self.name = f'BSC with p={p}'
-        if seed:
-            random.seed(seed)
     
     def transmit(self, word):
         k = len(word)
         p = self.p
-        noise = random.choices([0,1], weights=[1-p,p], k=k)
+        noise = random.choices([1,0], cum_weights=[p,1], k=k)
         bits = (noise + word) % 2
         return bits
 
