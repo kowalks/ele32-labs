@@ -101,12 +101,16 @@ class CyclicEncoder(Encoder):
         self.g = self._trim(G[0,:])
         self.h = self._trim(H[0,:])
         # raiz é 1+D^n
-        self.raiz = np.zeros(G.shape[1])
-        self.raiz[-1] = 1
+        self.raiz = np.zeros(G.shape[1]+1, dtype=int)
+        self.raiz[-1] = self.raiz[0] = 1
         # mapped_s é o array de palavras sindromes mapeadas, nesse caso [[1 .... 0]]
-        k = np.zeros(G.shape[0])
+        k = np.zeros(self.g.shape[0]-1)
         k[0] = 1
-        self.mapped_s = np.array([k])
+        self.mapped_s = [np.array(k, dtype=int)]
+        # print(f"g = {self.g}")
+        # print(f"r = {self.raiz}")
+        # print(f"ms = {self.mapped_s}")
+
     def _trim(self, u):
         return np.trim_zeros(u, 'b')
 
@@ -114,6 +118,7 @@ class CyclicEncoder(Encoder):
         m = self._trim(m)
         u = self._trim(u)
         if len(u) < len(m):
+            u = np.pad(u, (0,len(m)-len(u)-1))
             return u
 
         z = np.zeros(len(u)-len(m), dtype=int)
@@ -126,8 +131,8 @@ class CyclicEncoder(Encoder):
         z = np.zeros(1, dtype=int)
         u = np.concatenate([z, u])
         u = self._mod(u, m)
-
         return np.pad(u, (0,len(m)-len(u)-1))
+
     def _sum(self,a,b):
         if len(a) < len(b):
             c = b.copy()
@@ -136,10 +141,8 @@ class CyclicEncoder(Encoder):
             c = a.copy()
             c[:len(b)] += b
         return c % 2
+
     def _divide(self,v,g):
-        # print("g ", g)
-        # print("v ", v)
-        # v = self._trim(v)
         k  = len(v) - len(g)
         if k < 0:
             return v
@@ -166,38 +169,29 @@ class CyclicEncoder(Encoder):
         n = self.G.shape[1]
         s = self._mod(v,self.g)
         s_init = np.copy(s)
-        v_r = np.copy(v)
         if self.hamming_weight(s) == 0:
             return self._divide(v,self.g)
+        
         count = 0
-        print(s)
-        while s not in self.mapped_s:
+        while not np.any([np.array_equal(s, ms) for ms in self.mapped_s]):
+            # print(f"s = {s} // mapped_s = {self.mapped_s}")
+            # print(f"array: {[np.array_equal(s, ms) for ms in self.mapped_s]}")
             s = self._rotate(s,self.g)
-            v_r = self._rotate(v,self.raiz)
+            v = self._rotate(v,self.raiz)
             count += 1
-            print(s)
-            if s == s_init:
+            # print(f"count = {count} // s = {s} // s_init = {s_init}")
+            if np.array_equal(s,s_init):
                 print("ERROR -> erro não pode ser mapeado")
                 break
-            if count >= n:
-                break
         # corrigindo primeiro bit
-        v_r[0] = 1
+        v[0] = not v[0]
+        
         # desrotacionando vetor
-        
-        
-        for i in range(n-count):
-            v_r = self._rotate(v_r,self.raiz)
+        for _ in range(n-count):
+            v = self._rotate(v,self.raiz)
 
-        v = np.copy(v_r)
-        return self._divide(v,self.g)
-
-        #for rotacionando a sindrome
-        # se a sindrome In array
-        # trocar a posicao 1 
-        # invocar decode para novo ve
-        pass
-
+        # print(f"final v= {v}")
+        return self.decode(v)
 
 
 if __name__ == '__main__':
@@ -206,16 +200,16 @@ if __name__ == '__main__':
     G = np.genfromtxt('lab2_values/g10_6.csv', delimiter=',', dtype=int)
     H = np.genfromtxt('lab2_values/h10_6.csv', delimiter=',', dtype=int)
     ce = CyclicEncoder(G,H)
-    u = np.array([1,0,1,0,0,0])
-    print(u)
+    
+    u = np.array([1,0,0,0,0,0])
+    print(f"u = {u}")
+
     v = ce.encode(u)
-    e = np.array([0, 0, 0, 0, 0, 0, 0, 1, 0, 0])
+    print(f"v = {v}")
+
+    e = np.array([0, 0, 0, 0, 0, 1, 0, 1, 0, 0])
     ve = (v + e) % 2
-    print(v)
+    print(f"ve = {ve}")
+
     uf = ce.decode(ve)
-    print(uf)
-    # u = np.array([1,0,0,0,0,1])
-    # h = np.array([1,1])
-    # div = ce._divide(u,h)
-    # print(div)
-    # n = 10, 12, 14, 15, 16, 18, 20
+    print(f"uf = {uf}")
