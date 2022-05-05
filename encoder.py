@@ -88,3 +88,56 @@ class AlternativeEncoder(Encoder):
         e = self.syn_err_dict[np.array2string(s)]
         c = (r + e) % 2
         return c[:11]
+
+
+class CyclicEncoder(Encoder):
+    name = 'Hamming encoder'
+
+    def __init__(self, G):
+        self.G = G
+
+    def _trim(self, u):
+        return np.trim_zeros(u, 'b')
+
+    def _mod(self, u, m):
+        m = self._trim(m)
+        u = self._trim(u)
+        if len(u) < len(m):
+            return u
+
+        z = np.zeros(len(u)-len(m), dtype=int)
+        k = np.concatenate([z, m])
+        u = (k + u) % 2
+        u = self._trim(u)
+        return self._mod(u, m)
+
+    def _rotate(self, u, m):
+        z = np.zeros(1, dtype=int)
+        u = np.concatenate([z, u])
+        u = self._mod(u, m)
+
+        return np.pad(u, (0,len(m)-len(u)-1))
+
+    def encode(self, u):
+        v = np.dot(u, self.G) % 2
+        return v
+
+    def decode(self, r):
+        pass
+
+
+
+if __name__ == '__main__':
+    import numpy as np
+
+    G = np.genfromtxt('lab2_values/10_6.csv', delimiter=',', dtype=int)
+
+    ce = CyclicEncoder(G)
+    u = np.array([1,0,1])
+    m = np.array([1,1,0,1])
+    for i in range(10):
+        print(u)
+        u = ce._rotate(u,m)
+    
+
+    # n = 10, 12, 14, 15, 16, 18, 20
