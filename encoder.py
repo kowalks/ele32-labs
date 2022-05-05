@@ -95,21 +95,17 @@ class AlternativeEncoder(Encoder):
 class CyclicEncoder(Encoder):
     name = 'Hamming encoder'
 
-    def __init__(self, G,H):
+    def __init__(self, G,H,mapped_s):
         self.G = G
         self.H = H
         self.g = self._trim(G[0,:])
+        # print(f"g = {self.g}")
         self.h = self._trim(H[0,:])
         # raiz é 1+D^n
         self.raiz = np.zeros(G.shape[1]+1, dtype=int)
         self.raiz[-1] = self.raiz[0] = 1
         # mapped_s é o array de palavras sindromes mapeadas, nesse caso [[1 .... 0]]
-        k = np.zeros(self.g.shape[0]-1)
-        k[0] = 1
-        self.mapped_s = [np.array(k, dtype=int)]
-        # print(f"g = {self.g}")
-        # print(f"r = {self.raiz}")
-        # print(f"ms = {self.mapped_s}")
+        self.mapped_s = mapped_s
 
     def _trim(self, u):
         return np.trim_zeros(u, 'b')
@@ -145,7 +141,7 @@ class CyclicEncoder(Encoder):
     def _divide(self,v,g):
         k  = len(v) - len(g)
         if k < 0:
-            return v
+            return np.array([0])
 
         q = np.zeros(k+1, dtype=int) 
         q[-1] = 1
@@ -172,17 +168,15 @@ class CyclicEncoder(Encoder):
         if self.hamming_weight(s) == 0:
             return self._divide(v,self.g)
         
+        # print(f"s = {s}")
         count = 0
         while not np.any([np.array_equal(s, ms) for ms in self.mapped_s]):
-            # print(f"s = {s} // mapped_s = {self.mapped_s}")
-            # print(f"array: {[np.array_equal(s, ms) for ms in self.mapped_s]}")
             s = self._rotate(s,self.g)
             v = self._rotate(v,self.raiz)
             count += 1
             # print(f"count = {count} // s = {s} // s_init = {s_init}")
             if np.array_equal(s,s_init):
-                print("ERROR -> erro não pode ser mapeado")
-                break
+                return self._divide(v,self.g)
         # corrigindo primeiro bit
         v[0] = not v[0]
         
@@ -197,19 +191,39 @@ class CyclicEncoder(Encoder):
 if __name__ == '__main__':
     import numpy as np
 
-    G = np.genfromtxt('lab2_values/g10_6.csv', delimiter=',', dtype=int)
-    H = np.genfromtxt('lab2_values/h10_6.csv', delimiter=',', dtype=int)
-    ce = CyclicEncoder(G,H)
-    
-    u = np.array([1,0,0,0,0,0])
+    n = 20
+    k = 11
+
+    G = np.genfromtxt(f'lab2_values/g{n}_{k}.csv', delimiter=',', dtype=int)
+    H = np.genfromtxt(f'lab2_values/h{n}_{k}.csv', delimiter=',', dtype=int)
+    mapped_s = np.genfromtxt(f'lab2_values/s{n}_{k}.csv', delimiter=',', dtype=int).tolist()
+
+    ce = CyclicEncoder(G,H, mapped_s)
+
+    u = np.array([1,0,0,1,1,1,0,1,0,1,0])
     print(f"u = {u}")
 
     v = ce.encode(u)
     print(f"v = {v}")
 
-    e = np.array([0, 0, 0, 0, 0, 1, 0, 1, 0, 0])
-    ve = (v + e) % 2
-    print(f"ve = {ve}")
+    e = np.array(n*[0])
+    cnt = 0
+    cnt2 = 0
+    for i in range(len(e)):
+        for j in range(len(e)):
+            cnt2 += 1
+            e[i] = 1
+            e[j] = 1
 
-    uf = ce.decode(ve)
-    print(f"uf = {uf}")
+            ve = (v + e) % 2
+            # print(f"ve = {ve}")
+
+            uf = ce.decode(ve)
+            print(f"({i}, {j}) [{np.array_equal(uf,u)}]     {e}")
+            if np.array_equal(uf,u):
+                cnt += 1
+            e[j] = 0
+            e[i] = 0
+
+    print(cnt)
+    print(cnt2)
