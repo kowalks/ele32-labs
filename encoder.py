@@ -1,3 +1,4 @@
+from cmath import inf
 from matplotlib.pyplot import axis
 import numpy as np
 
@@ -9,8 +10,13 @@ class Encoder:
     
     def decode(self, word):
         raise NotImplementedError()
+
     def hamming_weight(self,word):
         return word.sum()
+
+    def hamming_dist(self, u, v):
+        k = (u+v) % 2
+        return self.hamming_weight(k)
 
 class HammingEncoder(Encoder):
     name = 'Hamming encoder'
@@ -90,7 +96,6 @@ class AlternativeEncoder(Encoder):
         e = self.syn_err_dict[np.array2string(s)]
         c = (r + e) % 2
         return c[:11]
-
 
 class CyclicEncoder(Encoder):
     name = 'Hamming encoder'
@@ -187,43 +192,93 @@ class CyclicEncoder(Encoder):
         # print(f"final v= {v}")
         return self.decode(v)
 
+class ConvolutionalEncoder(Encoder):
+    name = 'Convolutional encoder'
+
+    def __init__(self, n, m, G):
+        self.n = n
+        self.m = m
+        self.G = G
+
+    def _compute_transition(self, bit, M):
+        M = np.concatenate([[bit], M])
+        v = np.logical_and(self.G, M)
+        v = v.sum(axis=1) % 2
+        M = M[:-1]
+        return v, M
+
+
+    def encode(self, word):
+        M = np.zeros(self.m)
+        V = []
+        for bit in word:
+            v, M = self._compute_transition(bit, M)
+            V.append(v)
+        V = np.array(V).reshape(-1)
+        return V
+
+    def decode(self, word):
+        word = word.reshape((-1, self.m))
+        minDist = {}
+        minPath = {}
+
+        for i in range(2**self.m):
+            minDist[i] = inf
+            # minPath[i] = [i]
+            minPath[i] = []
+        minDist[0] = 0
+
+        for k in range(word.shape[0]):
+            bits = np.array(list(range(2**self.m)), dtype='uint8')
+            nodes = np.unpackbits(bits).reshape((-1, 8))[:, -self.m:]
+            newDist = {}
+            newPath = {}
+            for node_repr, node in enumerate(nodes):
+                # print(node)
+
+                v1, child1 = self._compute_transition(0, node)
+                v2, child2 = self._compute_transition(1, node)
+
+                # print(f'v1={v1} child1={child1} node_repr={node_repr}')
+                # print(f'v2={v2} child1={child2} node_repr={node_repr}')
+
+                repr1 = np.packbits(np.flip(child1), bitorder='little')[0]
+                # print(f'    repr1={repr1}')
+                nd = minDist[node_repr] + self.hamming_dist(v1, np.array(word[k]))
+                # print(f' nd child1: {nd}')
+                if (newDist.get(repr1) and nd < newDist.get(repr1)) or newDist.get(repr1) is None:
+                    # print(f'atualizando newDist[{repr1}] = {nd}')
+                    newDist[repr1] = nd
+                    newPath[repr1] = minPath[node_repr] + [0]
+
+                repr2 = np.packbits(np.flip(child2), bitorder='little')[0]
+                # print(f'    repr2={repr2}')
+                nd = minDist[node_repr] + self.hamming_dist(v2, np.array(word[k]))
+                # print(f' nd child2: {nd}')
+                # print(f'  newDist {not newDist.get(repr2)}')
+                if (newDist.get(repr2) and nd < newDist.get(repr2)) or newDist.get(repr2) is None:
+                    # print(f'cond1: {(newDist.get(repr2) and nd < newDist.get(repr2))}  cond2: {(not newDist.get(repr2))}')
+                    # print(f'atualizando newDist[{repr2}] = {nd}')
+                    newDist[repr2] = nd
+                    newPath[repr2] = minPath[node_repr] + [1]
+            minDist = newDist
+            minPath = newPath
+
+        node = min(minDist, key=minDist.get)
+        path = minPath[node]
+        return np.array(path)
+
 
 if __name__ == '__main__':
-    import numpy as np
+    n = 3
+    m = 3
+    G = np.array([[1, 0, 1, 1], [1, 1, 0, 1], [1, 1, 1, 1]])
 
-    n = 20
-    k = 11
-
-    G = np.genfromtxt(f'lab2_values/g{n}_{k}.csv', delimiter=',', dtype=int)
-    H = np.genfromtxt(f'lab2_values/h{n}_{k}.csv', delimiter=',', dtype=int)
-    mapped_s = np.genfromtxt(f'lab2_values/s{n}_{k}.csv', delimiter=',', dtype=int).tolist()
-
-    ce = CyclicEncoder(G,H, mapped_s)
-
-    u = np.array([1,0,0,1,1,1,0,1,0,1,0])
-    print(f"u = {u}")
-
-    v = ce.encode(u)
-    print(f"v = {v}")
-
-    e = np.array(n*[0])
-    cnt = 0
-    cnt2 = 0
-    for i in range(len(e)):
-        for j in range(len(e)):
-            cnt2 += 1
-            e[i] = 1
-            e[j] = 1
-
-            ve = (v + e) % 2
-            # print(f"ve = {ve}")
-
-            uf = ce.decode(ve)
-            print(f"({i}, {j}) [{np.array_equal(uf,u)}]     {e}")
-            if np.array_equal(uf,u):
-                cnt += 1
-            e[j] = 0
-            e[i] = 0
-
-    print(cnt)
-    print(cnt2)
+    enc = ConvolutionalEncoder(n, m, G)
+    word = np.array([1,0,0,1,1,0,0,0,1,0], dtype=int)
+    print(word)
+    u = enc.encode(word)
+    print(u)
+    v = enc.decode(u)
+    print(v)
+    
