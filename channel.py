@@ -1,4 +1,5 @@
 import random
+import math
 import numpy as np
 
 class Channel:
@@ -28,8 +29,22 @@ class IdealChannel(Channel):
     def transmit(self, word):
         return word
 
+class BPSK_AWGN(Channel):
+    name = 'BPSK modulation with AWGN noise channel'
+
+    def __init__(self, snr=10):
+        self.snr = snr
+        self.name = f'BPSK modulation with AWGN noise channel with Eb/N0={snr}'
+
+    def transmit(self, word):
+        k = len(word)
+        snr = self.snr
+        noise = np.random.normal(loc=0, scale=math.sqrt(1/(4*snr)), size=k)
+        bits = noise + word
+        return bits
+
 if __name__ == '__main__':
     word = np.array([0,1,1,1,0,1])
-    channel = BSC()
+    channel = BPSK_AWGN()
     transmitted = channel.transmit(word)
     print(transmitted)

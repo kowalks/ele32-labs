@@ -269,6 +269,16 @@ class ConvolutionalEncoder(Encoder):
         return np.array(path)
 
 
+class ConvEncoderEuclidean(ConvolutionalEncoder):
+    name = 'Convolutional encoder with Euclidean Distance'
+
+    def decode(self, word):
+        pass
+
+
+
+
+
 if __name__ == '__main__':
     n = 3
     m = 3
