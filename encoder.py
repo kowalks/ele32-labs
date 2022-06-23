@@ -2,6 +2,8 @@ from cmath import inf
 from matplotlib.pyplot import axis
 import numpy as np
 
+from channel import BPSK_AWGN
+
 class Encoder:
     name = 'Abstract encoder'
 
@@ -217,14 +219,16 @@ class ConvolutionalEncoder(Encoder):
         V = np.array(V).reshape(-1)
         return V
 
-    def decode(self, word):
+    def decode(self, word, dist_func=None):
+        if dist_func == None:
+            dist_func = self.hamming_dist
+
         word = word.reshape((-1, self.m))
         minDist = {}
         minPath = {}
 
         for i in range(2**self.m):
             minDist[i] = inf
-            # minPath[i] = [i]
             minPath[i] = []
         minDist[0] = 0
 
@@ -234,31 +238,20 @@ class ConvolutionalEncoder(Encoder):
             newDist = {}
             newPath = {}
             for node_repr, node in enumerate(nodes):
-                # print(node)
-
                 v1, child1 = self._compute_transition(0, node)
                 v2, child2 = self._compute_transition(1, node)
 
-                # print(f'v1={v1} child1={child1} node_repr={node_repr}')
-                # print(f'v2={v2} child1={child2} node_repr={node_repr}')
-
                 repr1 = np.packbits(np.flip(child1), bitorder='little')[0]
-                # print(f'    repr1={repr1}')
-                nd = minDist[node_repr] + self.hamming_dist(v1, np.array(word[k]))
-                # print(f' nd child1: {nd}')
+                nd = minDist[node_repr] + dist_func(v1, np.array(word[k]))
+
                 if (newDist.get(repr1) and nd < newDist.get(repr1)) or newDist.get(repr1) is None:
-                    # print(f'atualizando newDist[{repr1}] = {nd}')
                     newDist[repr1] = nd
                     newPath[repr1] = minPath[node_repr] + [0]
 
                 repr2 = np.packbits(np.flip(child2), bitorder='little')[0]
-                # print(f'    repr2={repr2}')
-                nd = minDist[node_repr] + self.hamming_dist(v2, np.array(word[k]))
-                # print(f' nd child2: {nd}')
-                # print(f'  newDist {not newDist.get(repr2)}')
+                nd = minDist[node_repr] + dist_func(v2, np.array(word[k]))
+
                 if (newDist.get(repr2) and nd < newDist.get(repr2)) or newDist.get(repr2) is None:
-                    # print(f'cond1: {(newDist.get(repr2) and nd < newDist.get(repr2))}  cond2: {(not newDist.get(repr2))}')
-                    # print(f'atualizando newDist[{repr2}] = {nd}')
                     newDist[repr2] = nd
                     newPath[repr2] = minPath[node_repr] + [1]
             minDist = newDist
@@ -273,9 +266,9 @@ class ConvEncoderEuclidean(ConvolutionalEncoder):
     name = 'Convolutional encoder with Euclidean Distance'
 
     def decode(self, word):
-        pass
-
-
+        def func(u, v):
+            return np.linalg.norm(u-v)**2
+        return super().decode(word, dist_func=func)
 
 
 
@@ -284,11 +277,17 @@ if __name__ == '__main__':
     m = 3
     G = np.array([[1, 0, 1, 1], [1, 1, 0, 1], [1, 1, 1, 1]])
 
-    enc = ConvolutionalEncoder(n, m, G)
+    enc = ConvEncoderEuclidean(n, m, G)
+    channel = BPSK_AWGN()
+
     word = np.array([1,0,0,1,1,0,0,0,1,0], dtype=int)
+
+    encoded = enc.encode(word)
+    transmitted = channel.transmit(encoded)
+    decoded = enc.decode(transmitted)
+    
     print(word)
-    u = enc.encode(word)
-    print(u)
-    v = enc.decode(u)
-    print(v)
+    print(encoded)
+    print(transmitted)
+    print(decoded)
     
