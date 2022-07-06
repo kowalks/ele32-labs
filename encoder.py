@@ -2,7 +2,7 @@ from cmath import inf
 from tqdm import trange
 import numpy as np
 
-from channel import BPSK_AWGN
+from channel import BPSK_AWGN, BSC, IdealChannel
 
 class Encoder:
     name = 'Abstract encoder'
@@ -201,6 +201,8 @@ class ConvolutionalEncoder(Encoder):
         self.n = n
         self.m = m
         self.G = G
+        self.Gt = np.packbits(G, axis=1, bitorder='little').reshape(-1)
+        self.nodes = (1 << self.m)
 
     def _compute_transition(self, bit, M):
         M = np.concatenate([[bit], M])
@@ -209,12 +211,24 @@ class ConvolutionalEncoder(Encoder):
         M = M[:-1]
         return v, M
 
+    def _transaction(self, bit, M):
+        M = (M<<1) + bit
+        v = self.Gt & M
+        v = np.array(list(map(lambda n: sum(map(int, f"{n:b}")) % 2, v)))
+        M = M % self.nodes
+        return v, M
+
+    def _bit_from_transaction(self, parent, child):
+        parent = (parent<<1) % self.nodes
+        if parent == child:
+            return 0
+        return 1
 
     def encode(self, word):
-        M = np.zeros(self.m)
+        M = 0
         V = []
         for bit in word:
-            v, M = self._compute_transition(bit, M)
+            v, M = self._transaction(bit, M)
             V.append(v)
         V = np.array(V).reshape(-1)
         return V
@@ -224,41 +238,36 @@ class ConvolutionalEncoder(Encoder):
             dist_func = self.hamming_dist
 
         word = word.reshape((-1, self.n))
-        minDist = {}
-        minPath = {}
+        minDist = np.ones((self.nodes, word.shape[0]+1), int)*inf
+        minParent = np.zeros((self.nodes, word.shape[0]), int)
 
-        for i in range(2**self.m):
-            minDist[i] = inf
-            minPath[i] = []
-        minDist[0] = 0
+        # minPath[i][0] = []
+        minDist[0][0] = 0
 
-        bits = np.array(list(range(2**self.m)), dtype='uint8')
-        nodes = np.unpackbits(bits).reshape((-1, 8))[:, -self.m:]
+        # bits = np.array(list(range(2**self.m)), dtype='uint8')
         for k in trange(word.shape[0]):
-            newDist = {}
-            newPath = {}
-            for node_repr, node in enumerate(nodes):
-                v1, child1 = self._compute_transition(0, node)
-                v2, child2 = self._compute_transition(1, node)
+            for node in range(self.nodes):
+                v1, child1 = self._transaction(0, node)
+                nd = minDist[node][k] + dist_func(v1, np.array(word[k]))
+                if nd < minDist[child1][k+1]:
+                    minDist[child1][k+1] = nd
+                    minParent[child1][k] = node
 
-                repr1 = np.packbits(np.flip(child1), bitorder='little')[0]
-                nd = minDist[node_repr] + dist_func(v1, np.array(word[k]))
+                v2, child2 = self._transaction(1, node)
+                nd = minDist[node][k] + dist_func(v2, np.array(word[k]))
+                if nd < minDist[child2][k+1]:
+                    minDist[child2][k+1] = nd
+                    minParent[child2][k] = node
 
-                if (newDist.get(repr1) and nd < newDist.get(repr1)) or newDist.get(repr1) is None:
-                    newDist[repr1] = nd
-                    newPath[repr1] = minPath[node_repr] + [0]
+        node = np.argmin(minDist[:,word.shape[0]])
+        path = []
+        for i in reversed(range(word.shape[0])):
+            parent = minParent[node][i]
+            bit = self._bit_from_transaction(parent, node)
+            node = parent
+            path.append(bit)
 
-                repr2 = np.packbits(np.flip(child2), bitorder='little')[0]
-                nd = minDist[node_repr] + dist_func(v2, np.array(word[k]))
-
-                if (newDist.get(repr2) and nd < newDist.get(repr2)) or newDist.get(repr2) is None:
-                    newDist[repr2] = nd
-                    newPath[repr2] = minPath[node_repr] + [1]
-            minDist = newDist
-            minPath = newPath
-
-        node = min(minDist, key=minDist.get)
-        path = minPath[node]
+        path = list(reversed(path))
         return np.array(path)
 
 
@@ -277,8 +286,11 @@ if __name__ == '__main__':
     m = 3
     G = np.array([[1, 0, 1, 1], [1, 1, 0, 1], [1, 1, 1, 1]])
 
-    enc = ConvEncoderEuclidean(n, m, G)
-    channel = BPSK_AWGN()
+    # enc = ConvEncoderEuclidean(n, m, G)
+    # channel = BPSK_AWGN()
+
+    enc = ConvolutionalEncoder(n, m, G)
+    channel = BSC(0.1)
 
     word = np.array([1,0,0,1,1,0,0,0,1,0], dtype=int)
 
