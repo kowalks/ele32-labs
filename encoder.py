@@ -1,5 +1,5 @@
 from cmath import inf
-from matplotlib.pyplot import axis
+from tqdm import trange
 import numpy as np
 
 from channel import BPSK_AWGN
@@ -223,7 +223,7 @@ class ConvolutionalEncoder(Encoder):
         if dist_func == None:
             dist_func = self.hamming_dist
 
-        word = word.reshape((-1, self.m))
+        word = word.reshape((-1, self.n))
         minDist = {}
         minPath = {}
 
@@ -232,9 +232,9 @@ class ConvolutionalEncoder(Encoder):
             minPath[i] = []
         minDist[0] = 0
 
-        for k in range(word.shape[0]):
-            bits = np.array(list(range(2**self.m)), dtype='uint8')
-            nodes = np.unpackbits(bits).reshape((-1, 8))[:, -self.m:]
+        bits = np.array(list(range(2**self.m)), dtype='uint8')
+        nodes = np.unpackbits(bits).reshape((-1, 8))[:, -self.m:]
+        for k in trange(word.shape[0]):
             newDist = {}
             newPath = {}
             for node_repr, node in enumerate(nodes):
