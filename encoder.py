@@ -262,10 +262,15 @@ class ConvolutionalEncoder(Encoder):
         node = np.argmin(minDist[:,word.shape[0]])
         path = []
         for i in reversed(range(word.shape[0])):
+            print(node)
             parent = minParent[node][i]
             bit = self._bit_from_transaction(parent, node)
             node = parent
             path.append(bit)
+
+        print(minDist)
+        print(minParent)
+        # print(path)
 
         path = list(reversed(path))
         return np.array(path)
@@ -290,7 +295,7 @@ if __name__ == '__main__':
     # channel = BPSK_AWGN()
 
     enc = ConvolutionalEncoder(n, m, G)
-    channel = BSC(0.1)
+    channel = IdealChannel()
 
     word = np.array([1,0,0,1,1,0,0,0,1,0], dtype=int)
 
