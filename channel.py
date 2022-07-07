@@ -39,7 +39,7 @@ class BPSK_AWGN(Channel):
     def transmit(self, word):
         k = len(word)
         snr = self.snr
-        noise = np.random.normal(loc=0, scale=math.sqrt(1/(4*snr)), size=k)
+        noise = np.random.normal(loc=0, scale=math.sqrt(1/(2*snr)), size=k)
         bits = noise + word
         return bits
 
